@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>حرف ولون - لاعب</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.player-wrap { max-width:560px; margin:0 auto; padding:14px 14px 50px; }
+.topbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px; }
+.buzz-section { display:flex; flex-direction:column; align-items:center; gap:16px; padding:20px 0; }
+.answer-wrap { display:flex; gap:8px; }
+.answer-wrap .input { flex:1; font-size:1.1rem; text-align:center; padding:14px; }
+</style>
+</head>
+<body>
+<div id="toasts"></div>
+<div id="reconnect" class="show"><div class="rc-box"><div class="spinner"></div><p>جاري الاتصال...</p></div></div>
+
+<!-- JOIN SCREEN -->
+<div id="join-screen" class="page-center hidden">
+  <div style="max-width:400px;width:100%;">
+    <div class="box">
+      <span class="logo" style="display:block;margin-bottom:16px;font-size:2rem;">حرف ولون</span>
+      <div class="fgroup">
+        <label class="label">اسمك</label>
+        <input id="name-inp" class="input" placeholder="أدخل اسمك" maxlength="20">
+      </div>
+      <button class="btn btn-primary btn-block" onclick="confirmJoin()">انضم للعبة</button>
+    </div>
+  </div>
+</div>
+
+<!-- GAME SCREEN -->
+<div id="game-screen" class="hidden player-wrap">
+
+  <div id="tbanner" class="tbanner mb2"></div>
+
+  <div class="topbar">
+    <span style="font-size:.78rem;color:var(--text3);" id="room-lbl">الغرفة: ---</span>
+    <div class="scores" style="gap:8px;">
+      <div class="sc red" style="padding:8px 14px;">
+        <span class="sc-num" id="sc-r" style="font-size:1.4rem;">0</span>
+        <div class="sc-lbl">🔴</div>
+      </div>
+      <div class="sc blue" style="padding:8px 14px;">
+        <span class="sc-num" id="sc-b" style="font-size:1.4rem;">0</span>
+        <div class="sc-lbl">🔵</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Letters -->
+  <div id="lgrid" class="lgrid mb2"></div>
+
+  <!-- Phase bar -->
+  <div id="pbar" class="pbar idle mb2">⏳ انتظر الحكم...</div>
+
+  <!-- Question -->
+  <div id="qarea" class="qbox mb2 hidden">
+    <div class="qcat" id="qcat"></div>
+    <div class="qtext" id="qtext"></div>
+  </div>
+
+  <!-- Timer -->
+  <div id="timer-area" class="hidden tc mb2">
+    <div class="timer-wrap">
+      <div class="timer-rel">
+        <svg class="timer-svg" viewBox="0 0 120 120">
+          <circle class="t-bg" cx="60" cy="60" r="50"/>
+          <circle class="t-prog" id="tprog" cx="60" cy="60" r="50"/>
+        </svg>
+        <span class="timer-num" id="tnum">15</span>
+      </div>
+      <div id="timer-lbl" style="font-size:.85rem;color:var(--text2);margin-top:6px;"></div>
+    </div>
+  </div>
+
+  <!-- BUZZ BUTTON (shown when round is active and player hasn't buzzed) -->
+  <div id="buzz-area" class="buzz-section hidden">
+    <p style="font-weight:700;font-size:1.1rem;color:var(--gold);">⚡ اضغط أسرع ما يمكن!</p>
+    <button id="buzz-btn" class="buzz-btn" onclick="doBuzz()">
+      <span style="font-size:1.9em;">🔔</span>
+      <span>زر الإجابة</span>
+    </button>
+  </div>
+
+  <!-- Answer input (I buzzed — my turn to answer) -->
+  <div id="ans-area" class="box hidden mb2" style="border-color:var(--gold);">
+    <p style="font-weight:700;text-align:center;margin-bottom:14px;color:var(--gold);font-size:1.1rem;">🎤 أنت الأول! اكتب إجابتك:</p>
+    <div class="answer-wrap">
+      <input id="ans-inp" class="input" placeholder="اكتب الإجابة هنا..." maxlength="60" dir="rtl">
+      <button class="btn btn-green" onclick="doAnswer()">إرسال</button>
+    </div>
+  </div>
+
+  <!-- Someone else buzzed -->
+  <div id="other-area" class="hidden buzz-alert mb2 tc">
+    <p style="color:var(--gold);font-weight:700;font-size:1rem;" id="other-msg"></p>
+  </div>
+
+  <!-- Waiting for question -->
+  <div id="wait-msg" class="tc" style="padding:28px 0;color:var(--text3);">
+    <div style="font-size:2.5rem;margin-bottom:10px;">⏳</div>
+    <p>انتظر الحكم ليطرح السؤال...</p>
+  </div>
+
+  <!-- Game ended -->
+  <div id="ended-area" class="box tc hidden">
+    <div style="font-size:3rem;margin-bottom:10px;">🏆</div>
+    <h2 style="margin-bottom:14px;">انتهت اللعبة!</h2>
+    <div class="scores mb2" style="justify-content:center;">
+      <div class="sc red"><span class="sc-num" id="end-r">0</span><div class="sc-lbl">الأحمر</div></div>
+      <div class="sc blue"><span class="sc-num" id="end-b">0</span><div class="sc-lbl">الأزرق</div></div>
+    </div>
+    <div id="winner-txt" style="font-size:1.2rem;font-weight:900;margin-top:8px;"></div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getDatabase, ref, set, get, update, onValue, runTransaction } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+window._firebaseApp = { initializeApp };
+window._firebaseDB = { getDatabase, ref, set, get, update, onValue, runTransaction };
+document.dispatchEvent(new Event('fb-ready'));
+</script>
+<script src="firebase-config.js"></script>
+<script src="app.js"></script>
+<script>
+let myTeam=null, myName=null, myPid=null, myCode=null;
+let lastState=null, timerInt=null, hasBuzzed=false, myTurnToAnswer=false;
+let unsub=null, timerExpiredSent=false, lastPhase=null;
+
+document.addEventListener('fb-ready', () => {
+  initFirebase();
+  myCode  = urlParam('room');
+  myTeam  = urlParam('team');
+  const np = urlParam('name');
+  myName  = np ? decodeURIComponent(np) : lsGet('name');
+  myPid   = lsGet('pid') || genId(); lsSet('pid', myPid);
+
+  if (!myCode || !myTeam) {
+    document.getElementById('reconnect').classList.remove('show');
+    document.getElementById('join-screen').classList.remove('hidden');
+    return;
+  }
+  if (myName) enterGame();
+  else {
+    document.getElementById('reconnect').classList.remove('show');
+    document.getElementById('join-screen').classList.remove('hidden');
+  }
+});
+
+function confirmJoin() {
+  const n = document.getElementById('name-inp').value.trim();
+  if (!n) { toast('أدخل اسمك', 'error'); return; }
+  myName = n; lsSet('name', n);
+  document.getElementById('join-screen').classList.add('hidden');
+  enterGame();
+}
+
+async function enterGame() {
+  document.getElementById('reconnect').classList.add('show');
+  try {
+    const ok = await roomExists(myCode);
+    if (!ok) {
+      document.getElementById('reconnect').classList.remove('show');
+      toast('الغرفة غير موجودة', 'error');
+      document.getElementById('join-screen').classList.remove('hidden');
+      return;
+    }
+    await joinTeam(myCode, myTeam, myName, myPid);
+    document.getElementById('reconnect').classList.remove('show');
+    document.getElementById('join-screen').classList.add('hidden');
+    document.getElementById('game-screen').classList.remove('hidden');
+
+    const b = document.getElementById('tbanner');
+    b.className = `tbanner ${myTeam}`;
+    b.innerHTML = `<span>${myTeam==='red'?'🔴 الفريق الأحمر':'🔵 الفريق الأزرق'}</span><span style="font-size:.85rem;font-weight:400;opacity:.85;">مرحباً ${myName}!</span>`;
+    document.getElementById('room-lbl').textContent = `الغرفة: ${myCode}`;
+    document.getElementById('buzz-btn').className = `buzz-btn ${myTeam}`;
+
+    if (unsub) unsub();
+    unsub = watchRoom(myCode, onState);
+    toast(`انضممت للفريق ${myTeam==='red'?'الأحمر':'الأزرق'}!`, 'success');
+  } catch(e) {
+    document.getElementById('reconnect').classList.remove('show');
+    toast('خطأ في الاتصال', 'error'); console.error(e);
+  }
+}
+
+function onState(state) {
+  lastState = state;
+  const _prevPhase = lastPhase;
+  document.getElementById('sc-r').textContent = state.teams?.red?.score  || 0;
+  document.getElementById('sc-b').textContent = state.teams?.blue?.score || 0;
+  renderLetters('lgrid', state.letters, state.question?.firstLetter);
+
+  if (state.status === 'ended') { showEnded(state); return; }
+
+  const round = state.round || {};
+  const q     = state.question;
+  const phase = round.phase || 'idle';
+  lastPhase = phase;
+
+  // Hide everything first
+  hide('qarea','timer-area','buzz-area','ans-area','other-area','wait-msg','ended-area');
+
+  const pbar = document.getElementById('pbar');
+
+  // Show question if we have one
+  if (q) {
+    show('qarea');
+    document.getElementById('qcat').textContent  = q.category || '';
+    document.getElementById('qtext').textContent = q.question;
+  }
+
+  if (phase === 'idle') {
+    hasBuzzed = false; myTurnToAnswer = false; timerExpiredSent = false;
+    pbar.className = 'pbar idle mb2';
+    pbar.textContent = q ? '📋 السؤال جاهز - انتظر بدء المؤقت' : '⏳ انتظر الحكم...';
+    if (!q) { hide('qarea'); show('wait-msg'); }
+    stopTimer();
+    return;
+  }
+
+  // Reset buzz state when a new phase starts that allows buzzing
+  if (phase === 'active') {
+    // Full reset - new round, everyone can buzz
+    if (lastPhase !== 'active') {
+      hasBuzzed = false;
+      myTurnToAnswer = false;
+    }
+  }
+  if (phase === 'passed') {
+    // Reset buzz for the team that is NOW allowed to buzz
+    const failedTeam = round.passedFrom;
+    const otherTeam  = failedTeam === 'red' ? 'blue' : 'red';
+    if (myTeam === otherTeam) {
+      // I'm on the team that gets to buzz now - reset my buzz state
+      hasBuzzed = false;
+      myTurnToAnswer = false;
+    }
+  }
+
+  if (phase === 'active') {
+    pbar.className = 'pbar active mb2';
+    pbar.textContent = '⚡ الجولة بدأت! اضغط الزر أسرع ما يمكن!';
+    show('timer-area');
+    document.getElementById('timer-lbl').textContent = 'كلا الفريقين يتنافسان';
+    startTimer(round.timerEnd, 15);
+    if (!hasBuzzed) {
+      show('buzz-area');
+      document.getElementById('buzz-btn').disabled = false;
+    }
+    return;
+  }
+
+  if (phase === 'passed') {
+    const failedTeam = round.passedFrom;
+    const otherTeam  = failedTeam === 'red' ? 'blue' : 'red';
+    const canBuzz    = myTeam === otherTeam && !hasBuzzed;
+    soundPass();
+    pbar.className = 'pbar active mb2';
+    pbar.textContent = `🔄 انتقل السؤال للفريق ${otherTeam==='red'?'الأحمر':'الأزرق'}!`;
+    show('timer-area');
+    document.getElementById('timer-lbl').textContent =
+      canBuzz ? '⚡ الآن دورك!' : `ينتظر الفريق ${otherTeam==='red'?'الأحمر':'الأزرق'}`;
+    startTimer(round.timerEnd, 10);
+    if (canBuzz) {
+      show('buzz-area');
+      document.getElementById('buzz-btn').disabled = false;
+    } else {
+      show('other-area');
+      document.getElementById('other-msg').textContent =
+        myTeam === failedTeam
+          ? '⏳ انتهى دورك - ينتظر الفريق الآخر'
+          : '⏳ انتظر - دور فريقك الآن!';
+    }
+    return;
+  }
+
+  if (phase === 'buzzed') {
+    stopTimer();
+    const iMe = round.buzzedBy === myName && round.buzzedTeam === myTeam;
+    if (iMe) {
+      myTurnToAnswer = true;
+      pbar.className = 'pbar buzzed mb2';
+      pbar.textContent = '🎤 أنت الأول! اكتب إجابتك!';
+      show('ans-area');
+      setTimeout(()=>document.getElementById('ans-inp').focus(), 100);
+    } else {
+      pbar.className = 'pbar buzzed mb2';
+      const who = `${round.buzzedBy} (${round.buzzedTeam==='red'?'🔴 الأحمر':'🔵 الأزرق'})`;
+      pbar.textContent = `🎤 ${who} يجيب...`;
+      show('other-area');
+      document.getElementById('other-msg').textContent = `${who} يكتب إجابته - انتظر!`;
+    }
+    return;
+  }
+
+  if (phase === 'answered') {
+    stopTimer();
+    const iMe = round.buzzedBy === myName && round.buzzedTeam === myTeam;
+    pbar.className = 'pbar answered mb2';
+    pbar.textContent = iMe ? '✅ إجابتك وصلت - ينتظر حكم الحكم' : 'انتظار حكم الحكم...';
+    show('other-area');
+    document.getElementById('other-msg').textContent = iMe
+      ? '⏳ الحكم يراجع إجابتك...'
+      : `${round.buzzedBy} أجاب - ينتظر الحكم`;
+  }
+}
+
+async function doBuzz() {
+  if (hasBuzzed) return;
+  const round = lastState?.round;
+  if (!round) return;
+  if (round.phase !== 'active' && round.phase !== 'passed') return;
+  // In 'passed' phase, only the other team can buzz
+  if (round.phase === 'passed' && round.passedFrom === myTeam) return;
+  hasBuzzed = true;
+  document.getElementById('buzz-btn').disabled = true;
+  soundBuzz();
+  const ok = await buzzIn(myCode, myName, myTeam);
+  if (!ok) {
+    hasBuzzed = false;
+    document.getElementById('buzz-btn').disabled = false;
+    toast('لاعب آخر كان أسرع!', 'warning');
+  } else {
+    toast('ضغطت أولاً! اكتب إجابتك!', 'success');
+  }
+}
+
+async function doAnswer() {
+  const ans = document.getElementById('ans-inp').value.trim();
+  if (!ans) { toast('اكتب الإجابة', 'error'); return; }
+  await submitAnswer(myCode, ans);
+  document.getElementById('ans-inp').value = '';
+  toast('تم إرسال إجابتك!', 'success');
+}
+
+function startTimer(end, total) {
+  stopTimer();
+  timerExpiredSent = false;
+  if (!end) return;
+  const update = () => {
+    const left = timeLeft(end);
+    document.getElementById('tnum').textContent = left;
+    const prog = document.getElementById('tprog');
+    prog.style.strokeDashoffset = 314 * (1 - left / total);
+    prog.className = 't-prog' + (left <= 3 ? ' urgent' : left <= 6 ? ' warn' : '');
+    if (left <= 3 && left > 0) soundTick();
+    if (left <= 0 && !timerExpiredSent) {
+      timerExpiredSent = true;
+      stopTimer();
+    }
+  };
+  update();
+  timerInt = setInterval(update, 400);
+}
+function stopTimer() { if (timerInt) { clearInterval(timerInt); timerInt = null; } }
+
+function showEnded(state) {
+  stopTimer();
+  hide('timer-area','buzz-area','ans-area','other-area','wait-msg','qarea');
+  show('ended-area');
+  const r = state.teams?.red?.score||0, b = state.teams?.blue?.score||0;
+  document.getElementById('end-r').textContent = r;
+  document.getElementById('end-b').textContent = b;
+  let txt = r>b ? '🔴 الفريق الأحمر يفوز!' : b>r ? '🔵 الفريق الأزرق يفوز!' : '🤝 تعادل!';
+  if ((r>b&&myTeam==='red')||(b>r&&myTeam==='blue')) { txt='🏆 فريقك فاز! تهانينا!'; soundCorrect(); }
+  document.getElementById('winner-txt').textContent = txt;
+  document.getElementById('pbar').textContent = '🏁 انتهت اللعبة';
+}
+
+function show(...ids){ ids.forEach(id=>{const e=document.getElementById(id);if(e)e.classList.remove('hidden');}); }
+function hide(...ids){ ids.forEach(id=>{const e=document.getElementById(id);if(e)e.classList.add('hidden');}); }
+document.addEventListener('keydown', e=>{ if(e.key==='Enter'&&myTurnToAnswer) doAnswer(); });
+</script>
+</body>
+</html>

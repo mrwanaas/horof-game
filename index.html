@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>حرف ولون</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.home-wrap { max-width:480px; width:100%; }
+.team-card { padding:26px 20px; border-radius:18px; cursor:pointer; text-align:center; border:2px solid transparent; transition:all .3s; display:flex; flex-direction:column; align-items:center; gap:12px; }
+.team-card:hover { transform:translateY(-4px); }
+.team-card.red { border-color:rgba(231,76,60,.3); background:linear-gradient(135deg,rgba(231,76,60,.08),var(--bg2)); }
+.team-card.red:hover { border-color:var(--red); box-shadow:0 0 30px var(--redg); }
+.team-card.blue { border-color:rgba(52,152,219,.3); background:linear-gradient(135deg,rgba(52,152,219,.08),var(--bg2)); }
+.team-card.blue:hover { border-color:var(--blue); box-shadow:0 0 30px var(--blueg); }
+.pcount { font-size:.8rem; color:var(--text3); }
+</style>
+</head>
+<body>
+<div id="toasts"></div>
+<div id="reconnect"><div class="rc-box"><div class="spinner"></div><p>جاري الاتصال...</p></div></div>
+
+<!-- ===== STEP 1: NAME + CREATE/JOIN ===== -->
+<div id="s1" class="page-center">
+  <div class="home-wrap">
+    <div class="box">
+      <span class="logo mb2" style="display:block;margin-bottom:8px;">حرف ولون</span>
+      <p class="subtitle mb3" style="margin-bottom:24px;">لعبة الحروف العربية التنافسية</p>
+
+      <div class="tabs">
+        <button class="tab on" onclick="switchTab('create',this)">إنشاء غرفة</button>
+        <button class="tab" onclick="switchTab('join',this)">انضمام لغرفة</button>
+      </div>
+
+      <!-- Create -->
+      <div id="tab-create">
+        <div class="fgroup">
+          <label class="label">اسمك</label>
+          <input id="c-name" class="input" placeholder="أدخل اسمك" maxlength="20">
+        </div>
+        <button class="btn btn-primary btn-block btn-xl" onclick="doCreate()">🎮 إنشاء غرفة جديدة</button>
+      </div>
+
+      <!-- Join -->
+      <div id="tab-join" class="hidden">
+        <div class="fgroup">
+          <label class="label">اسمك</label>
+          <input id="j-name" class="input" placeholder="أدخل اسمك" maxlength="20">
+        </div>
+        <div class="fgroup">
+          <label class="label">كود الغرفة (6 أرقام)</label>
+          <input id="j-code" class="input" placeholder="مثال: 123456" maxlength="6" inputmode="numeric">
+        </div>
+        <button class="btn btn-primary btn-block btn-xl" onclick="doJoin()">🚀 انضم للغرفة</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== STEP 2: ROOM LOBBY ===== -->
+<div id="s2" class="hidden wrap" style="padding-top:30px; padding-bottom:60px;">
+  <div class="tc mb3">
+    <span class="logo" style="font-size:2rem;">حرف ولون</span>
+  </div>
+
+  <!-- Room code -->
+  <div class="box box-sm tc mb2">
+    <p style="color:var(--text3);font-size:.85rem;margin-bottom:6px;">كود الغرفة - شارك هذا الكود مع أصدقائك</p>
+    <div class="room-code" id="disp-code">------</div>
+    <div class="flex gap1 justify-center mt2">
+      <button class="btn btn-ghost btn-sm" onclick="copyCode()">📋 نسخ الكود</button>
+      <button class="btn btn-ghost btn-sm" onclick="goJudge()">⚖️ دخول كحكم</button>
+    </div>
+  </div>
+
+  <!-- Team cards -->
+  <h3 class="tc mb2">اختر فريقك</h3>
+  <div class="two-col mb3">
+    <div class="team-card red box" onclick="joinTeamLocal('red')">
+      <div style="font-size:2.5rem;">🔴</div>
+      <div style="font-size:1.3rem;font-weight:900;color:#ff6b6b;">الفريق الأحمر</div>
+      <div id="rc" class="pcount">0 لاعب</div>
+      <div id="red-qr" class="qr-wrap mt1"></div>
+    </div>
+    <div class="team-card blue box" onclick="joinTeamLocal('blue')">
+      <div style="font-size:2.5rem;">🔵</div>
+      <div style="font-size:1.3rem;font-weight:900;color:#74b9ff;">الفريق الأزرق</div>
+      <div id="bc" class="pcount">0 لاعب</div>
+      <div id="blue-qr" class="qr-wrap mt1"></div>
+    </div>
+  </div>
+
+  <!-- Players -->
+  <div class="box">
+    <h4 class="mb2">اللاعبون المنضمون</h4>
+    <div class="two-col">
+      <div>
+        <p style="color:#ff6b6b;font-weight:700;font-size:.85rem;margin-bottom:8px;">🔴 الفريق الأحمر</p>
+        <div id="rpl" style="display:flex;flex-direction:column;gap:6px;"></div>
+      </div>
+      <div>
+        <p style="color:#74b9ff;font-weight:700;font-size:.85rem;margin-bottom:8px;">🔵 الفريق الأزرق</p>
+        <div id="bpl" style="display:flex;flex-direction:column;gap:6px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase -->
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getDatabase, ref, set, get, update, onValue, runTransaction } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+window._firebaseApp = { initializeApp };
+window._firebaseDB = { getDatabase, ref, set, get, update, onValue, runTransaction };
+document.dispatchEvent(new Event('fb-ready'));
+</script>
+<script src="firebase-config.js"></script>
+<script src="app.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+let myCode = null;
+let myName = null;
+let myPid = null;
+let unsub = null;
+
+document.addEventListener('fb-ready', () => {
+  document.getElementById('reconnect').classList.remove('show');
+  initFirebase();
+  // Pre-fill saved values
+  const n = lsGet('name'); if(n) { document.getElementById('c-name').value=n; document.getElementById('j-name').value=n; }
+  const c = lsGet('code'); if(c) document.getElementById('j-code').value=c;
+  // Handle URL params for direct join link
+  const rp = urlParam('room'), tp = urlParam('team');
+  if(rp && tp) { document.getElementById('j-code').value=rp; switchTab('join', document.querySelectorAll('.tab')[1]); }
+});
+
+function switchTab(tab, el) {
+  document.getElementById('tab-create').classList.toggle('hidden', tab!=='create');
+  document.getElementById('tab-join').classList.toggle('hidden', tab!=='join');
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  if(el) el.classList.add('on');
+}
+
+async function doCreate() {
+  const name = document.getElementById('c-name').value.trim();
+  if(!name) { toast('أدخل اسمك أولاً','error'); return; }
+  lsSet('name', name);
+  myName = name;
+  myPid = genId();
+  lsSet('pid', myPid);
+  myCode = genCode();
+
+  document.getElementById('reconnect').classList.add('show');
+  try {
+    await createRoom(myCode, name);
+    document.getElementById('reconnect').classList.remove('show');
+    showLobby(myCode);
+    toast('تم إنشاء الغرفة! شارك الكود مع أصدقائك','success');
+  } catch(e) {
+    document.getElementById('reconnect').classList.remove('show');
+    toast('خطأ: تأكد من إعداد Firebase أولاً','error'); console.error(e);
+  }
+}
+
+async function doJoin() {
+  const name = document.getElementById('j-name').value.trim();
+  const code = document.getElementById('j-code').value.trim();
+  if(!name) { toast('أدخل اسمك','error'); return; }
+  if(!isValidCode(code)) { toast('الكود يجب أن يكون 6 أرقام','error'); return; }
+  lsSet('name',name); lsSet('code',code);
+  myName = name; myCode = code;
+  myPid = lsGet('pid') || genId(); lsSet('pid',myPid);
+
+  document.getElementById('reconnect').classList.add('show');
+  try {
+    const ok = await roomExists(code);
+    document.getElementById('reconnect').classList.remove('show');
+    if(!ok) { toast('الغرفة غير موجودة، تحقق من الكود','error'); return; }
+    showLobby(code);
+    toast('انضممت بنجاح!','success');
+  } catch(e) {
+    document.getElementById('reconnect').classList.remove('show');
+    toast('خطأ في الاتصال','error'); console.error(e);
+  }
+}
+
+function showLobby(code) {
+  myCode = code;
+  document.getElementById('s1').classList.add('hidden');
+  document.getElementById('s2').classList.remove('hidden');
+  document.getElementById('disp-code').textContent = code;
+
+  // Generate QR codes
+  makeQR('red-qr', makeUrl('player.html',{room:code,team:'red'}));
+  makeQR('blue-qr', makeUrl('player.html',{room:code,team:'blue'}));
+
+  // Watch room
+  if(unsub) unsub();
+  unsub = watchRoom(code, updateLobby);
+}
+
+function makeQR(id, url) {
+  const el = document.getElementById(id);
+  el.innerHTML = '';
+  try {
+    new QRCode(el, { text:url, width:100, height:100, colorDark:'#1a1d2e', colorLight:'#ffffff', correctLevel:QRCode.CorrectLevel.M });
+  } catch(e) { el.innerHTML='<p style="font-size:.6rem;color:#333;word-break:break-all;">'+url+'</p>'; }
+}
+
+function updateLobby(state) {
+  const red = state.teams?.red?.players || {};
+  const blue = state.teams?.blue?.players || {};
+  document.getElementById('rc').textContent = Object.keys(red).length + ' لاعب';
+  document.getElementById('bc').textContent = Object.keys(blue).length + ' لاعب';
+  renderPList('rpl', red);
+  renderPList('bpl', blue);
+}
+
+function renderPList(id, players) {
+  const el = document.getElementById(id);
+  const list = Object.values(players);
+  el.innerHTML = list.length === 0
+    ? '<p style="color:var(--text3);font-size:.8rem;">لا يوجد لاعبون بعد</p>'
+    : list.map(p=>`<div class="player-item"><div class="pdot"></div><span>${p.name}</span></div>`).join('');
+}
+
+async function joinTeamLocal(team) {
+  if(!myName) { toast('أدخل اسمك أولاً','error'); return; }
+  if(!myCode) { toast('لا توجد غرفة','error'); return; }
+  const pid = myPid || (myPid=genId(), lsSet('pid',myPid), myPid);
+  await joinTeam(myCode, team, myName, pid);
+  lsSet('team',team);
+  window.location.href = makeUrl('player.html',{room:myCode,team,name:encodeURIComponent(myName)});
+}
+
+function goJudge() {
+  if(!myCode) { toast('لا توجد غرفة','error'); return; }
+  window.location.href = makeUrl('judge.html',{room:myCode});
+}
+
+function copyCode() {
+  if(!myCode) return;
+  navigator.clipboard.writeText(myCode).then(()=>toast('تم نسخ الكود!','success')).catch(()=>toast('الكود: '+myCode,'info'));
+}
+</script>
+</body>
+</html>

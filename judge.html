@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>حرف ولون - الحكم</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.judge-wrap { max-width:1060px; margin:0 auto; padding:14px; }
+.jheader { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:16px; }
+.judge-cell { cursor:pointer; }
+.judge-cell:hover { transform:scale(1.12) !important; border-color:var(--gold) !important; }
+.mini-pl { padding:5px 10px; background:var(--bg3); border-radius:6px; font-size:.8rem; margin-bottom:4px; }
+.mini-head { font-weight:700; font-size:.82rem; margin-bottom:6px; }
+.hist-wrap { max-height:160px; overflow-y:auto; display:flex; flex-direction:column; gap:5px; }
+.sec-lbl { font-size:.72rem; font-weight:700; color:var(--text3); letter-spacing:1px; text-transform:uppercase; margin-bottom:8px; }
+.start-big { background:linear-gradient(135deg,#27ae60,#2ecc71); color:white;
+             box-shadow:0 4px 24px rgba(46,204,113,.45); font-size:1.3rem; }
+.start-big:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 8px 32px rgba(46,204,113,.5); }
+.start-big:disabled { opacity:.35; }
+</style>
+</head>
+<body>
+<div id="toasts"></div>
+<div id="reconnect" class="show"><div class="rc-box"><div class="spinner"></div><p>جاري الاتصال...</p></div></div>
+
+<!-- Winner modal -->
+<div id="win-modal" class="modal-bg">
+  <div class="modal">
+    <div id="win-emoji" style="font-size:4rem;margin-bottom:12px;">🏆</div>
+    <h2 id="win-title" style="margin-bottom:16px;"></h2>
+    <div class="scores mb2" style="justify-content:center;">
+      <div class="sc red"><span class="sc-num" id="win-r">0</span><div class="sc-lbl">أحمر</div></div>
+      <div class="sc blue"><span class="sc-num" id="win-b">0</span><div class="sc-lbl">أزرق</div></div>
+    </div>
+    <button class="btn btn-primary" onclick="document.getElementById('win-modal').classList.remove('open')">إغلاق</button>
+  </div>
+</div>
+
+<div class="judge-wrap">
+
+  <!-- Header -->
+  <div class="jheader">
+    <div>
+      <h2 style="font-size:1.4rem;margin-bottom:2px;">⚖️ لوحة الحكم</h2>
+      <span id="j-room" style="font-size:.8rem;color:var(--text3);">الغرفة: ---</span>
+    </div>
+    <div class="flex gap2 items-center flex-wrap">
+      <div class="scores" style="gap:8px;">
+        <div class="sc red" style="padding:8px 16px;">
+          <span class="sc-num" id="j-sr" style="font-size:1.8rem;">0</span>
+          <div class="sc-lbl">🔴 أحمر</div>
+        </div>
+        <div class="sc blue" style="padding:8px 16px;">
+          <span class="sc-num" id="j-sb" style="font-size:1.8rem;">0</span>
+          <div class="sc-lbl">🔵 أزرق</div>
+        </div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="confirmEnd()">إنهاء اللعبة</button>
+    </div>
+  </div>
+
+  <div class="two-col-main">
+
+    <!-- LEFT -->
+    <div style="display:flex;flex-direction:column;gap:14px;">
+
+      <!-- Progress -->
+      <div class="box box-sm">
+        <div class="flex" style="justify-content:space-between;margin-bottom:6px;font-size:.8rem;">
+          <span style="color:#ff6b6b;" id="pr-r">أحمر: 0</span>
+          <span style="color:var(--text3);" id="pr-u">متاح: 28</span>
+          <span style="color:#74b9ff;" id="pr-b">أزرق: 0</span>
+        </div>
+        <div class="prog-bar mb1"><div id="pf-r" class="prog-fill prog-red" style="width:0%;"></div></div>
+        <div class="prog-bar"><div id="pf-b" class="prog-fill prog-blue" style="width:0%;"></div></div>
+      </div>
+
+      <!-- Letters -->
+      <div class="box box-sm">
+        <div class="sec-lbl">الحروف (اضغط لتعيين يدوي)</div>
+        <div id="j-lgrid" class="lgrid"></div>
+      </div>
+
+      <!-- Players -->
+      <div class="box box-sm">
+        <div class="sec-lbl">اللاعبون</div>
+        <div class="two-col" style="gap:10px;">
+          <div>
+            <div class="mini-head" style="color:#ff6b6b;">🔴 الأحمر</div>
+            <div id="j-rpl"></div>
+          </div>
+          <div>
+            <div class="mini-head" style="color:#74b9ff;">🔵 الأزرق</div>
+            <div id="j-bpl"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- History -->
+      <div class="box box-sm">
+        <div class="sec-lbl">سجل الإجابات</div>
+        <div id="j-hist" class="hist-wrap">
+          <p style="color:var(--text3);font-size:.8rem;text-align:center;">لا يوجد سجل بعد</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: controls -->
+    <div style="display:flex;flex-direction:column;gap:14px;">
+
+      <!-- Phase indicator -->
+      <div id="j-pbar" class="pbar idle">⏳ ولّد سؤالاً للبدء</div>
+
+      <!-- Buzz alert -->
+      <div id="j-buzz" class="buzz-alert hidden">
+        <div class="sec-lbl">⚡ ضغط زر الإجابة</div>
+        <div id="j-buzz-who" style="font-size:1.2rem;font-weight:900;color:var(--gold);margin-bottom:10px;"></div>
+
+        <!-- Waiting for answer -->
+        <div id="j-buzz-wait" style="color:var(--text2);font-size:.9rem;">⌛ ينتظر كتابة الإجابة...</div>
+
+        <!-- Answer received -->
+        <div id="j-buzz-ans-wrap" class="hidden">
+          <div class="sec-lbl" style="margin-top:8px;">الإجابة المُرسلة:</div>
+          <div id="j-buzz-ans" style="font-size:1.4rem;font-weight:900;color:var(--text);
+               background:var(--bg3);border-radius:8px;padding:10px 16px;margin-bottom:14px;text-align:center;"></div>
+          <div class="flex gap2">
+            <button class="btn btn-green btn-block" onclick="judgeCorrect()">✅ صحيح</button>
+            <button class="btn btn-danger btn-block" onclick="judgeWrong()">❌ خطأ</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Timer -->
+      <div id="j-timer" class="hidden tc">
+        <div class="timer-wrap">
+          <div class="timer-rel">
+            <svg class="timer-svg" viewBox="0 0 120 120" style="width:90px;height:90px;">
+              <circle class="t-bg" cx="60" cy="60" r="50"/>
+              <circle class="t-prog" id="j-tprog" cx="60" cy="60" r="50"/>
+            </svg>
+            <span class="timer-num" id="j-tnum" style="font-size:1.6rem;">15</span>
+          </div>
+          <div id="j-timer-lbl" style="font-size:.8rem;color:var(--text2);margin-top:4px;"></div>
+        </div>
+      </div>
+
+      <!-- Question generation -->
+      <div class="box box-sm">
+        <div class="sec-lbl">توليد السؤال</div>
+        <div class="pills" id="j-pills"></div>
+        <button class="btn btn-primary btn-block mb2" onclick="genQ()">🎲 توليد سؤال جديد</button>
+
+        <div id="j-qbox" class="hidden">
+          <div class="qbox">
+            <div class="qcat" id="j-qcat"></div>
+            <div class="qtext" id="j-qtext" style="margin-bottom:14px;"></div>
+            <div class="sec-lbl">الإجابة (مخفية عن اللاعبين)</div>
+            <div class="answer-box" id="j-qans" style="margin-bottom:10px;"></div>
+            <div class="tc">
+              <span class="sec-lbl" style="display:inline;">يبدأ بحرف: </span>
+              <div class="letter-badge" style="display:inline-flex;" id="j-qletter"></div>
+            </div>
+          </div>
+        </div>
+        <div id="j-noq" style="text-align:center;color:var(--text3);font-size:.85rem;padding:12px;">اضغط "توليد سؤال" للبدء</div>
+      </div>
+
+      <!-- Round control -->
+      <div class="box box-sm">
+        <div class="sec-lbl">التحكم بالجولة</div>
+
+        <!-- THE ONE BIG BUTTON: start round for both teams -->
+        <button id="start-btn" class="btn btn-xl btn-block start-big mb2" onclick="doStart()" disabled>
+          ▶️ ابدأ الجولة — كلا الفريقين (١٥ ثانية)
+        </button>
+
+        <div class="flex gap2">
+          <button class="btn btn-ghost btn-block" onclick="doSkip()">⏭️ تخطي السؤال</button>
+        </div>
+
+        <div style="margin-top:12px;padding:10px;background:var(--bg3);border-radius:var(--r);font-size:.8rem;color:var(--text3);line-height:1.7;">
+          <strong style="color:var(--text2);">آلية اللعب:</strong><br>
+          ١. ولّد سؤالاً<br>
+          ٢. اقرأ السؤال للاعبين<br>
+          ٣. اضغط "ابدأ الجولة"<br>
+          ٤. أول لاعب يضغط الزر يجيب<br>
+          ٥. إجابة خاطئة → ينتقل للفريق الآخر تلقائياً
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getDatabase, ref, set, get, update, onValue, runTransaction } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+window._firebaseApp = { initializeApp };
+window._firebaseDB = { getDatabase, ref, set, get, update, onValue, runTransaction };
+document.dispatchEvent(new Event('fb-ready'));
+</script>
+<script src="firebase-config.js"></script>
+<script src="app.js"></script>
+<script src="questions.js"></script>
+<script>
+let myCode=null, lastState=null, curQ=null;
+let qm=null, timerInt=null, history=[], category='all';
+let timerTotal=15, timerExpiredSent=false;
+let unsub=null;
+
+document.addEventListener('fb-ready', () => {
+  initFirebase();
+  myCode = urlParam('room');
+  if (!myCode) {
+    toast('لا يوجد رقم غرفة! أضف ?room=XXXXXX للرابط', 'error');
+    document.getElementById('reconnect').classList.remove('show');
+    return;
+  }
+  document.getElementById('j-room').textContent = `الغرفة: ${myCode}`;
+  qm = new QuestionManager();
+  buildPills();
+  unsub = watchRoom(myCode, onState);
+  setTimeout(() => document.getElementById('reconnect').classList.remove('show'), 1000);
+});
+
+function buildPills() {
+  const cats = ['all', ...qm.getCategories()];
+  document.getElementById('j-pills').innerHTML = cats.map(cat =>
+    `<button class="pill${cat==='all'?' on':''}" onclick="setCat('${cat}',this)">${cat==='all'?'الكل':cat}</button>`
+  ).join('');
+}
+
+function setCat(cat, el) {
+  category = cat;
+  document.querySelectorAll('.pill').forEach(p=>p.classList.remove('on'));
+  el.classList.add('on');
+}
+
+function onState(state) {
+  lastState = state;
+  document.getElementById('j-sr').textContent = state.teams?.red?.score  || 0;
+  document.getElementById('j-sb').textContent = state.teams?.blue?.score || 0;
+  renderJudgeLetters(state.letters);
+  updateProgress(state.letters);
+  renderPl('j-rpl', state.teams?.red?.players);
+  renderPl('j-bpl', state.teams?.blue?.players);
+
+  if (state.status === 'ended') { showWinner(state); return; }
+
+  const round = state.round || {};
+  const q     = state.question;
+  const phase = round.phase || 'idle';
+
+  // Sync current question display
+  // Judge sees pendingQuestion OR active question
+  const visibleQ = state.pendingQuestion || q;
+  if (visibleQ && visibleQ.question !== curQ?.question) { curQ = visibleQ; showQBox(visibleQ); }
+  if (!visibleQ && curQ) { curQ = null; hideQBox(); }
+
+  const pbar     = document.getElementById('j-pbar');
+  const buzzDiv  = document.getElementById('j-buzz');
+  const timerDiv = document.getElementById('j-timer');
+  const startBtn = document.getElementById('start-btn');
+
+  buzzDiv.classList.add('hidden');
+  timerDiv.classList.add('hidden');
+  stopTimer();
+
+  switch(phase) {
+    case 'idle':
+      pbar.className = 'pbar idle';
+      pbar.textContent = visibleQ ? '📋 السؤال جاهز — اضغط "ابدأ الجولة"' : '⏳ ولّد سؤالاً للبدء';
+      startBtn.disabled = !visibleQ;
+      timerExpiredSent = false;
+      break;
+
+    case 'active':
+      pbar.className = 'pbar active';
+      pbar.textContent = '⚡ الجولة نشطة — كلا الفريقين يتنافسان!';
+      startBtn.disabled = true;
+      timerDiv.classList.remove('hidden');
+      document.getElementById('j-timer-lbl').textContent = 'مفتوح للجميع - 15 ثانية';
+      timerTotal = 15;
+      startJudgeTimer(round.timerEnd, 15);
+      break;
+
+    case 'passed':
+      pbar.className = 'pbar active';
+      const ot = round.passedFrom === 'red' ? '🔵 الأزرق' : '🔴 الأحمر';
+      pbar.textContent = `🔄 انتقل للفريق ${ot} — 10 ثوانٍ`;
+      startBtn.disabled = true;
+      timerDiv.classList.remove('hidden');
+      document.getElementById('j-timer-lbl').textContent = `دور الفريق ${ot}`;
+      timerTotal = 10;
+      startJudgeTimer(round.timerEnd, 10);
+      soundPass();
+      break;
+
+    case 'buzzed':
+      pbar.className = 'pbar buzzed';
+      pbar.textContent = `🎤 ${round.buzzedBy} (${round.buzzedTeam==='red'?'🔴 الأحمر':'🔵 الأزرق'}) يجيب!`;
+      startBtn.disabled = true;
+      buzzDiv.classList.remove('hidden');
+      document.getElementById('j-buzz-who').textContent =
+        `${round.buzzedBy} — الفريق ${round.buzzedTeam==='red'?'🔴 الأحمر':'🔵 الأزرق'}`;
+      document.getElementById('j-buzz-wait').classList.remove('hidden');
+      document.getElementById('j-buzz-ans-wrap').classList.add('hidden');
+      soundBuzz();
+      break;
+
+    case 'answered':
+      pbar.className = 'pbar answered';
+      pbar.textContent = '📝 الإجابة وصلت — احكم عليها!';
+      startBtn.disabled = true;
+      buzzDiv.classList.remove('hidden');
+      document.getElementById('j-buzz-who').textContent =
+        `${round.buzzedBy} — الفريق ${round.buzzedTeam==='red'?'🔴 الأحمر':'🔵 الأزرق'}`;
+      document.getElementById('j-buzz-ans').textContent  = round.playerAnswer || '';
+      document.getElementById('j-buzz-wait').classList.add('hidden');
+      document.getElementById('j-buzz-ans-wrap').classList.remove('hidden');
+      break;
+  }
+}
+
+function renderJudgeLetters(letters) {
+  const grid = document.getElementById('j-lgrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  ARABIC_LETTERS.forEach(letter => {
+    const key   = letterKey(letter);
+    const owner = letters?.[key]?.owner || null;
+    const d = document.createElement('div');
+    d.className = 'lcell judge-cell';
+    if (owner === 'red')  d.classList.add('owned-red');
+    if (owner === 'blue') d.classList.add('owned-blue');
+    if (curQ?.firstLetter === letter) d.classList.add('highlighted');
+    d.textContent = letter;
+    d.title = owner ? `${letter} → ${owner==='red'?'أحمر':'أزرق'}` : letter;
+    d.onclick = () => manualAssign(letter, owner);
+    grid.appendChild(d);
+  });
+}
+
+function updateProgress(letters) {
+  const vals  = Object.values(letters || {});
+  const total = vals.length || 28;
+  const r = vals.filter(l=>l.owner==='red').length;
+  const b = vals.filter(l=>l.owner==='blue').length;
+  document.getElementById('pr-r').textContent = `أحمر: ${r}`;
+  document.getElementById('pr-b').textContent = `أزرق: ${b}`;
+  document.getElementById('pr-u').textContent = `متاح: ${total-r-b}`;
+  document.getElementById('pf-r').style.width  = `${(r/total)*100}%`;
+  document.getElementById('pf-b').style.width  = `${(b/total)*100}%`;
+}
+
+function renderPl(id, players) {
+  const el   = document.getElementById(id);
+  const list = Object.values(players || {});
+  el.innerHTML = list.length === 0
+    ? '<p style="color:var(--text3);font-size:.78rem;">لا يوجد لاعبون</p>'
+    : list.map(p=>`<div class="mini-pl">${p.name}</div>`).join('');
+}
+
+function showQBox(q) {
+  document.getElementById('j-qbox').classList.remove('hidden');
+  document.getElementById('j-noq').classList.add('hidden');
+  document.getElementById('j-qcat').textContent    = q.category || '';
+  document.getElementById('j-qtext').textContent   = q.question;
+  document.getElementById('j-qans').textContent    = q.answer;
+  document.getElementById('j-qletter').textContent = q.firstLetter;
+}
+function hideQBox() {
+  document.getElementById('j-qbox').classList.add('hidden');
+  document.getElementById('j-noq').classList.remove('hidden');
+}
+
+async function genQ() {
+  const wonLetters = Object.values(lastState?.letters || {})
+    .filter(l=>l.owner).map(l=>l.letter);
+  const q = qm.getRandom(wonLetters, category === 'all' ? null : category);
+  if (!q) { toast('لا توجد أسئلة متاحة!', 'warning'); return; }
+  // Show immediately in judge UI (don't wait for Firebase round-trip)
+  curQ = q;
+  showQBox(q);
+  document.getElementById('start-btn').disabled = false;
+  // Save to Firebase as pendingQuestion (hidden from players until round starts)
+  await setQuestion(myCode, q);
+  toast(`السؤال جاهز — الإجابة تبدأ بـ "${q.firstLetter}"`, 'info');
+}
+
+async function doStart() {
+  if (!curQ) { toast('ولّد سؤالاً أولاً', 'error'); return; }
+  document.getElementById('start-btn').disabled = true;
+  await startRound(myCode);
+  soundStart();
+  toast('الجولة بدأت! كلا الفريقين يتنافسان!', 'info');
+}
+
+async function judgeCorrect() {
+  const round = lastState?.round;
+  if (!curQ || !round?.buzzedTeam) return;
+  const team = round.buzzedTeam;
+  await markCorrect(myCode, curQ.firstLetter, team);
+  addHistory(curQ.firstLetter, team, curQ.answer, round.playerAnswer);
+  soundCorrect();
+  toast(`✅ صحيح! حرف "${curQ.firstLetter}" للفريق ${team==='red'?'الأحمر':'الأزرق'}!`, 'success', 4000);
+  curQ = null;
+  hideQBox();
+  document.getElementById('start-btn').disabled = true;
+
+  // Check all letters won
+  const snap = await _fb.get(dbRef(`${roomPath(myCode)}/letters`));
+  const lv = Object.values(snap.val() || {});
+  if (lv.length > 0 && lv.every(l=>l.owner)) await endGame(myCode);
+}
+
+async function judgeWrong() {
+  soundWrong();
+  const round = lastState?.round;
+  const failed = round?.buzzedTeam;
+  const already = round?.passedFrom;
+  if (already) {
+    toast('كلا الفريقين أخطآ — سؤال جديد', 'warning');
+  } else {
+    toast(`❌ خطأ! ينتقل للفريق ${failed==='red'?'الأزرق':'الأحمر'}`, 'error');
+  }
+  await markWrong(myCode);
+  if (already) { curQ = null; document.getElementById('start-btn').disabled = true; }
+}
+
+async function doSkip() {
+  stopTimer(); curQ = null;
+  document.getElementById('start-btn').disabled = true;
+  await clearRound(myCode);
+  toast('تم تخطي السؤال', 'info');
+}
+
+function manualAssign(letter, currentOwner) {
+  if (currentOwner) {
+    if (!confirm(`الحرف "${letter}" مملوك للفريق ${currentOwner==='red'?'الأحمر':'الأزرق'}.\nهل تريد إلغاء الملكية؟`)) return;
+    dbSet(`${roomPath(myCode)}/letters/${letterKey(letter)}`, { letter, owner: null });
+    toast(`تم إلغاء ملكية "${letter}"`, 'info');
+  } else {
+    const t = confirm(`تعيين "${letter}" للأحمر؟\n(إلغاء = للأزرق)`) ? 'red' : 'blue';
+    if (!confirm(`تأكيد: تعيين "${letter}" للفريق ${t==='red'?'الأحمر':'الأزرق'}؟`)) return;
+    markCorrect(myCode, letter, t);
+    toast(`تم تعيين "${letter}" للفريق ${t==='red'?'الأحمر':'الأزرق'}`, 'success');
+  }
+}
+
+function addHistory(letter, team, correctAns, playerAns) {
+  history.unshift({ letter, team, correctAns, playerAns });
+  document.getElementById('j-hist').innerHTML = history.slice(0,12).map(h=>`
+    <div class="hist-item">
+      <div class="hist-chip ${h.team}">${h.letter}</div>
+      <div>
+        <div style="font-weight:700;font-size:.82rem;">${h.correctAns}</div>
+        ${h.playerAns?`<div style="color:var(--text3);font-size:.75rem;">أجاب: ${h.playerAns}</div>`:''}
+      </div>
+    </div>`).join('');
+}
+
+function startJudgeTimer(end, total) {
+  stopTimer(); timerExpiredSent = false;
+  if (!end) return;
+  const up = () => {
+    const left = timeLeft(end);
+    document.getElementById('j-tnum').textContent = left;
+    const p = document.getElementById('j-tprog');
+    p.style.strokeDashoffset = 314 * (1 - left/total);
+    p.className = 't-prog'+(left<=3?' urgent':left<=6?' warn':'');
+    if (left <= 0 && !timerExpiredSent) {
+      timerExpiredSent = true;
+      stopTimer();
+      // Auto-handle timeout
+      handleTimeout();
+    }
+  };
+  up(); timerInt = setInterval(up, 400);
+}
+
+async function handleTimeout() {
+  const round = lastState?.round;
+  if (!round) return;
+  if (round.phase !== 'active' && round.phase !== 'passed') return;
+  toast('⏰ انتهى الوقت!', 'warning');
+  const already = round.passedFrom;
+  if (already && already !== '_timeout_') {
+    // Both teams timed out
+    toast('كلا الفريقين لم يجيبا — سؤال جديد', 'warning');
+    await clearRound(myCode);
+    curQ = null;
+    document.getElementById('start-btn').disabled = true;
+  } else {
+    // First team timed out — pass to other
+    const failedTeam = round.phase === 'passed' ? round.passedFrom : (round.activeTeam || '_timeout_');
+    await passToOtherTeam(myCode, failedTeam || '_timeout_');
+    toast('⏰ انتهى الوقت — ينتقل للفريق الآخر', 'info');
+  }
+}
+
+function stopTimer() { if(timerInt){ clearInterval(timerInt); timerInt=null; } }
+
+async function confirmEnd() {
+  if (!confirm('هل أنت متأكد من إنهاء اللعبة؟')) return;
+  await endGame(myCode);
+}
+
+function showWinner(state) {
+  const r = state.teams?.red?.score||0, b = state.teams?.blue?.score||0;
+  document.getElementById('win-r').textContent = r;
+  document.getElementById('win-b').textContent = b;
+  document.getElementById('win-title').textContent = r>b?'🔴 الفريق الأحمر يفوز!':b>r?'🔵 الفريق الأزرق يفوز!':'🤝 تعادل!';
+  document.getElementById('win-emoji').textContent = r>b?'🔴🏆':b>r?'🔵🏆':'🤝';
+  document.getElementById('win-modal').classList.add('open');
+  soundCorrect();
+}
+</script>
+</body>
+</html>
